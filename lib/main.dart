@@ -10,7 +10,12 @@ void main() async {
   runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -28,28 +33,14 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  void _signOut() async {
-    await _auth.signOut();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Signed out successfully')));
-  }
+  final TextEditingController _newPasswordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        actions: <Widget>[
-          ElevatedButton(
-            onPressed: () {
-              _signOut();
-            },
-            child: Text('Sign Out'),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(widget.title)),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -107,8 +98,11 @@ class _RegisterEmailSectionState extends State<RegisterEmailSection> {
             controller: _emailController,
             decoration: InputDecoration(labelText: 'Email'),
             validator: (value) {
-              if (value?.isEmpty ?? true) {
-                return 'Please enter some text';
+              if (value == null || value.isEmpty) {
+                return 'Please enter email';
+              }
+              if (!value.contains('@') || !value.contains('.com')) {
+                return 'Please enter correct email format"';
               }
               return null;
             },
@@ -117,8 +111,11 @@ class _RegisterEmailSectionState extends State<RegisterEmailSection> {
             controller: _passwordController,
             decoration: InputDecoration(labelText: 'Password'),
             validator: (value) {
-              if (value?.isEmpty ?? true) {
-                return 'Please enter some text';
+              if (value == null || value.isEmpty) {
+                return 'Please enter a password';
+              }
+              if (value.length <= 6) {
+                return 'Password must be longer than 6 characters';
               }
               return null;
             },
@@ -177,6 +174,15 @@ class _EmailPasswordFormState extends State<EmailPasswordForm> {
         _userEmail = _emailController.text;
         _initialState = false;
       });
+      // if successful login, navigate to profile screen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder:
+              (context) =>
+                  ProfileScreen(userEmail: _userEmail, auth: widget.auth),
+        ),
+      );
     } catch (e) {
       setState(() {
         _success = false;
@@ -239,6 +245,102 @@ class _EmailPasswordFormState extends State<EmailPasswordForm> {
                   ? 'Successfully signed in $_userEmail'
                   : 'Sign in failed',
               style: TextStyle(color: _success ? Colors.green : Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Profile Screen
+class ProfileScreen extends StatefulWidget {
+  final String userEmail;
+  final FirebaseAuth auth;
+
+  ProfileScreen({required this.userEmail, required this.auth});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final TextEditingController _newPasswordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  // Logout function
+  void _signOut(BuildContext context) async {
+    await widget.auth.signOut();
+    // Navigate back to the login screen (MyHomePage)
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MyHomePage(title: 'Firebase Auth Demo'),
+      ),
+    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Signed out successfully')));
+  }
+
+  void _changePassword(BuildContext context) async {
+    if (_formKey.currentState?.validate() ?? false) {
+      try {
+        // Get current user
+        User? user = widget.auth.currentUser;
+
+        // Update the password
+        await user?.updatePassword(_newPasswordController.text);
+        await user?.reload(); // Reload to get the updated user data
+        user = widget.auth.currentUser;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Password changed successfully!')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error changing password: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Profile"), backgroundColor: Colors.blue),
+      body: Column(
+        children: [
+          Center(child: Text('Welcome, ${widget.userEmail}')),
+          ElevatedButton(
+            onPressed: () => _signOut(context),
+            child: Text('logout'),
+          ),
+          SizedBox(height: 20),
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                TextFormField(
+                  controller: _newPasswordController,
+                  obscureText: true,
+                  decoration: InputDecoration(labelText: 'New Password'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a password';
+                    }
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+                SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => _changePassword(context),
+                  child: Text('Change Password'),
+                ),
+              ],
             ),
           ),
         ],
